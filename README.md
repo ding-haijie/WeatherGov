@@ -1,4 +1,3 @@
-
 # WeatherGov
 
 ***Test Generalization Ability For [SAN_D2T](https://github.com/ding-haijie/SAN_D2T).***
@@ -15,6 +14,8 @@ Run `python data_preprocess/preprocess.py` to process original files to one pick
 
 ### Train Model
 
-Run `python train_models.py` to continue training/save model, and evaluate the pre-trained models with metrics **BLEU**.
+Run `python train.py` to train/save model, and evaluate the pre-trained models with metrics **BLEU**.
 
-Run `python test_model.py` to generate utterances and examine the pre-trained models.
+### Http Server
+
+Run `python server.py` to launch a http-server.
