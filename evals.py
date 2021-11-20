@@ -1,31 +1,4 @@
 import nltk
-from sklearn.metrics import f1_score
-
-
-class F1Score(object):
-    def __init__(self):
-        self.list_golds = []
-        self.list_aligns = []
-
-    def reset_aligns(self):
-        self.list_aligns = []
-
-    def set_golds(self, list_golds):
-        self.list_golds = list_golds
-
-    def add_align(self, align):
-        self.list_aligns.append(align)
-
-    def calculate(self):
-        assert (len(self.list_golds) == len(self.list_aligns))  # sanity check
-        macro_f1, micro_f1 = 0., 0.
-        for golds, aligns in zip(self.list_golds, self.list_aligns):
-            macro_f1 += f1_score(y_true=golds, y_pred=aligns, average='macro')
-            micro_f1 += f1_score(y_true=golds, y_pred=aligns, average='micro')
-        macro_f1 /= len(self.list_golds)
-        micro_f1 /= len(self.list_golds)
-
-        return macro_f1 * 100, micro_f1 * 100
 
 
 class BleuScore(object):
