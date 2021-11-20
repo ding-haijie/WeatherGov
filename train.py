@@ -1,15 +1,16 @@
 import datetime
 import math
 import time
-from tqdm import tqdm
+
 import torch.nn as nn
 from torch import optim, Tensor
+from tqdm import tqdm
 
+from config import params
 from data_processor import DataProcessor
-from utils import *
 from evals import BleuScore
 from models import EncoderGate, DecoderAttn, Data2Text
-from config import params
+from utils import *
 
 max_len = params["max_len"]
 input_dim = params["input_dim"]

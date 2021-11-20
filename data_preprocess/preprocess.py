@@ -1,7 +1,7 @@
 import os
-import re
 import pickle
 import random
+import re
 
 """
 dataset: weathergov[https://cs.stanford.edu/~pliang/data/weather-data.zip]

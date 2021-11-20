@@ -1,8 +1,8 @@
+import logging
 import os
 import random
-import logging
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.utils.data as Data

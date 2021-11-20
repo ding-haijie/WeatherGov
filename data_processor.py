@@ -1,8 +1,9 @@
 import pickle
+
 import numpy as np
 
-from data_preprocess.get_info import get_info
 from config import params
+from data_preprocess.get_info import get_info
 
 
 class DataProcessor(object):
