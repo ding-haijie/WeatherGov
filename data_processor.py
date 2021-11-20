@@ -1,53 +1,49 @@
 import pickle
 import numpy as np
 
-from data_preprocess import get_info
+from data_preprocess.get_info import get_info
 from config import params
 
 
 class DataProcessor(object):
 
     def __init__(self):
-
+        super(DataProcessor, self).__init__()
         self.num_info = params['num_info']
         self.dim_info = params['input_dim']
         self.max_len = params['max_len']
-        self.train_mode = params['train_mode']
-        self._load_dataset()
 
         with open('./data/weathergov_vocab.pkl', 'rb') as f:
-            self.vocab = pickle.load(f)
-        self.ind2word = self.vocab['ind2word']
-        self.word2ind = self.vocab['word2ind']
+            vocab = pickle.load(f)
+        self.ind2word = vocab['ind2word']
+        self.word2ind = vocab['word2ind']
+        del vocab
         self.SOS_TOKEN = self.word2ind['SOS_TOKEN']
         self.EOS_TOKEN = self.word2ind['EOS_TOKEN']
         self.PAD_TOKEN = self.word2ind['PAD_TOKEN']
         self.UNK_TOKEN = self.word2ind['UNK_TOKEN']
 
-    def _load_dataset(self):
         with open('./data/weathergov_data.pkl', 'rb') as f:
-            _data_samples = pickle.load(f)
-        if self.train_mode:
-            self.train_data = _data_samples[:24000]  # 24000
-            self.dev_data = _data_samples[24000: 26764]  # 2764
-            self.seq_info_train, self.seq_target_train = self._process_seq('train')
-            self.seq_info_dev, self.seq_target_dev = self._process_seq('dev')
+            samples = pickle.load(f)
+        self.test_data = samples[26764:]  # 2764
+        del samples
+
+    def process_seq(self, tag="train"):
+        with open('./data/weathergov_data.pkl', 'rb') as f:
+            samples = pickle.load(f)
+        if tag == 'train':
+            data = samples[:24000]  # 24000
+        elif tag == 'dev':
+            data = samples[24000: 26764]  # 2764
         else:
-            self.test_data = _data_samples[26764:]  # 2764
+            raise ValueError('invalid data_tag: ', tag)
+        del samples
 
-    def _process_seq(self, data_tag):
-        if data_tag == 'train':
-            tag_data = self.train_data
-        elif data_tag == 'dev':
-            tag_data = self.dev_data
-        else:
-            raise ValueError('invalid data_tag: ', data_tag)
+        seq_info_numpy = np.zeros((len(data), self.num_info, self.dim_info))
+        seq_target_numpy = np.full((len(data), self.max_len, 1), self.PAD_TOKEN, dtype=np.float)
 
-        seq_info_numpy = np.zeros((len(tag_data), self.num_info, self.dim_info))
-        seq_target_numpy = np.full((len(tag_data), self.max_len, 1), self.PAD_TOKEN, dtype=np.float)
-
-        for data_index, data_item in enumerate(tag_data):
-            seq_info_numpy[data_index] = get_info.get_info(data_item)
+        for data_index, data_item in enumerate(data):
+            seq_info_numpy[data_index] = get_info(data_item)
             tokens_text = data_item['text'].split()
             seq_target_numpy[data_index, 0] = self.SOS_TOKEN
             idx_pos = 1
@@ -62,7 +58,7 @@ class DataProcessor(object):
 
     def process_one_data(self, idx_data=0):
         data_item = self.test_data[idx_data]
-        seq_info_numpy = get_info.get_info(data_item)
+        seq_info_numpy = get_info(data_item)
 
         return seq_info_numpy
 

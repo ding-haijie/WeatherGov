@@ -18,14 +18,14 @@ def save_checkpoint(experiment_time, model, optimizer):
     torch.save(checkpoint, checkpoint_path)
 
 
-def load_checkpoint(latest, file_name=None):
+def load_checkpoint(latest, device, file_name=None):
     """ load the latest checkpoint """
     checkpoints_dir = './results/checkpoints'
     if latest:
         file_list = os.listdir(checkpoints_dir)
         file_list.sort(key=lambda fn: os.path.getmtime(
             checkpoints_dir + '/' + fn))
-        checkpoint = torch.load(checkpoints_dir + '/' + file_list[-1])
+        checkpoint = torch.load(checkpoints_dir + '/' + file_list[-1], map_location=device)
     else:
         if file_name is None:
             raise ValueError('checkpoint_path cannot be empty!')
@@ -46,45 +46,21 @@ def check_file_exist(file_path):
         os.mkdir(file_path)
 
 
-def count_parameters(net: torch.nn.Module):
-    return sum(p.numel() for p in net.parameters() if p.requires_grad)
-
-
-def get_data_loader(data, batch_size, device, data_tag='train'):
-    if data_tag == 'train':
-        info_train = torch.tensor(
-            data.seq_info_train, dtype=torch.float, device=device)
-        target_train = torch.tensor(
-            data.seq_target_train, dtype=torch.long, device=device)
-
-        train_dataset = Data.TensorDataset(info_train, target_train)
-
-        data_loader = Data.DataLoader(
-            dataset=train_dataset,
-            batch_size=batch_size,
-            shuffle=True)
-    elif data_tag == 'dev':
-        info_dev = torch.tensor(
-            data.seq_info_dev, dtype=torch.float, device=device)
-        target_dev = torch.tensor(
-            data.seq_target_dev, dtype=torch.long, device=device)
-
-        dev_dataset = Data.TensorDataset(info_dev, target_dev)
-
-        data_loader = Data.DataLoader(
-            dataset=dev_dataset,
-            batch_size=batch_size,
-            shuffle=False)
-    else:
-        raise ValueError('invalid data_tag: ', data_tag)
-
+def get_data_loader(data, batch_size, device, tag="train"):
+    seq_info_numpy, seq_target_numpy = data.process_seq(tag)
+    _dataset = Data.TensorDataset(
+        torch.tensor(seq_info_numpy, dtype=torch.float, device=device),
+        torch.tensor(seq_target_numpy, dtype=torch.float, device=device))
+    data_loader = Data.DataLoader(
+        dataset=_dataset,
+        batch_size=batch_size,
+        shuffle=(tag == "train"))
     return data_loader
 
 
 def get_logger(filename, verbosity=1, name=None):
     level_dict = {0: logging.DEBUG, 1: logging.INFO, 2: logging.WARNING}
     formatter = logging.Formatter("[%(levelname)s] %(message)s")
-    # "[%(asctime)s][%(filename)s][line:%(lineno)d][%(levelname)s] %(message)s"
 
     logger = logging.getLogger(name)
     logger.setLevel(level_dict[verbosity])

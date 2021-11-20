@@ -35,6 +35,7 @@ class EncoderGate(nn.Module):
 
         return content_selection
 
+    # noinspection DuplicatedCode
     def forward(self, encoder_input):
         fc_input = self.dropout(self.fc_in(encoder_input))
         encoder_output, (h_n, c_n) = self.bi_lstm(fc_input)
@@ -95,11 +96,12 @@ class DecoderAttn(nn.Module):
 
 
 class Data2Text(nn.Module):
-    def __init__(self, encoder, decoder, beam_width):
+    def __init__(self, encoder, decoder, beam_width, is_cuda_available):
         super(Data2Text, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.beam_width = beam_width
+        self.is_cuda_available = is_cuda_available
 
         self.SOS_TOKEN = 0
         self.EOS_TOKEN = 1
@@ -116,7 +118,8 @@ class Data2Text(nn.Module):
             batch_size = seq_target.size(1)
             pad_tensor = torch.zeros(output_dim)
             pad_tensor[self.PAD_TOKEN] = 1
-            seq_output = pad_tensor.repeat((self.max_len, batch_size, 1)).cuda()
+            seq_output = pad_tensor.repeat((self.max_len, batch_size, 1)).to(
+                'cuda' if self.is_cuda_available else 'cpu')
 
             for timeStep in range(self.max_len):
                 decoder_input = seq_target[timeStep]
@@ -129,7 +132,8 @@ class Data2Text(nn.Module):
             beam search with beam_width=1 is equivalent to simple greedy search
             """
             if self.beam_width == 1:  # greedy search
-                seq_output = torch.tensor([[self.PAD_TOKEN] for _ in range(self.max_len)]).cuda()
+                seq_output = torch.tensor([[self.PAD_TOKEN] for _ in range(self.max_len)]).to(
+                    'cuda' if self.is_cuda_available else 'cpu')
                 decoder_input = seq_target  # first token is SOS_TOKEN
                 for timeStep in range(self.max_len):
                     decoder_output, decoder_hidden = self.decoder(
