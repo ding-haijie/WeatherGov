@@ -3,17 +3,24 @@ import pickle
 import random
 import re
 
+import mysql.connector as mysql_connector
+
 """
 dataset: weathergov[https://cs.stanford.edu/~pliang/data/weather-data.zip]
 take all separated files into one integrated pickle file
 """
-__author__ = 'Ding Haijie'
+
+conn = mysql_connector.connect(host="[host]", port="[port]",
+                               user="[username]", password="[password]",
+                               database="[db_name]")
+cursor = conn.cursor()
 
 path = '../data/weathergov/data'
 states_all = os.listdir(path)
 states_all.sort()
 
 samples_data_list = []
+persist_list = []
 
 for state_name in states_all:
     # iterate states folder
@@ -30,30 +37,34 @@ for state_name in states_all:
         for per_sample in samples_list:
             # iterate samples folder
             data_dict = {}
+            persist_dict = {}
             for per_sample_path in per_sample:
                 if '.align' in per_sample_path:
                     with open(
                             os.path.abspath(path) + '/' + state_name + '/' + city_name + '/' + per_sample_path,
                             encoding='utf-8') as f:
                         line = f.readline()
-                        list_temp = []
+                        list_tmp = []
                         while line:
                             # each line contains a set of (line number of the text file,
                             # line number of the events file to which the line of text is aligned)
                             for value in line.split()[1:]:
-                                list_temp.append(int(value))
+                                list_tmp.append(int(value))
                             line = f.readline()
-                    data_dict['align'] = list_temp
+                    data_dict['align'] = list_tmp
+                    persist_dict['align'] = str(list_tmp)
                 elif '.events' in per_sample_path:
                     with open(
                             os.path.abspath(path) + '/' + state_name + '/' + city_name + '/' + per_sample_path,
                             encoding='utf-8') as f:
+                        events = ""
                         line = f.readline()  # each id_number's relevant data per line
                         idx = 0
                         while line:
-                            list_temp = line.split()
+                            events += line + "\n"
+                            list_tmp = line.split()
                             dict_idx = {}
-                            for text in list_temp:
+                            for text in list_tmp:
                                 if '.type' in text:
                                     dict_idx['type'] = text[text.index(':') + 1:]
                                 if '.label' in text:
@@ -77,26 +88,46 @@ for state_name in states_all:
                             data_dict['id' + str(idx)] = dict_idx
                             idx += 1
                             line = f.readline()
+                        persist_dict['events'] = str(events)
                 elif '.text' in per_sample_path:
                     with open(
                             os.path.abspath(path) + '/' + state_name + '/' + city_name + '/' + per_sample_path,
                             encoding='utf-8') as f:
                         line = f.readline()
-                        list_temp = []
+                        list_tmp = []
                         while line:
-                            list_temp.append(re.sub('\n', ' ', line).lower())
+                            list_tmp.append(re.sub('\n', ' ', line).lower())
                             line = f.readline()
-                        data_dict['text'] = ''.join(list_temp)
+                        data_dict['text'] = ''.join(list_tmp)
+                        persist_dict['text'] = ''.join(list_tmp)
                 else:
                     pass
-                data_dict['date'] = per_sample_path.split('.')[0]
+                date = per_sample_path.split('.')[0]
+                data_dict['date'] = date
                 data_dict['city'] = city_name
                 data_dict['state'] = state_name
+                offset = date.split("-")[-1]
+                date = "-".join(date.split("-")[:-1])
+                persist_dict['date'] = date
+                persist_dict['offset'] = int(offset)
+                persist_dict['state'] = state_name
+                persist_dict['city'] = city_name
             samples_data_list.append(data_dict)
+            persist_list.append(persist_dict)
 
 # randomly shuffle the dataset
 random.shuffle(samples_data_list)
 
-# save samples into pickle file
+# persist into pickle file
 with open('../data/weathergov_data.pkl', 'wb') as f:
     pickle.dump(samples_data_list, f)
+
+# persist into mysql database
+for sample in persist_list:
+    cursor.execute("insert into weather (events, align, text, city, state, date, offset) values "
+                   "(%s, %s, %s, %s, %s, %s, %s)",
+                   (sample['events'], sample['align'], sample['text'],
+                    sample['city'], sample['state'], sample['date'], sample['offset']))
+conn.commit()
+cursor.close()
+conn.close()
