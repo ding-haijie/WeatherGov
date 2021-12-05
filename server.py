@@ -10,10 +10,9 @@ from config import params
 from data_preprocess.get_info import get_info
 from data_processor import DataProcessor
 from models import EncoderGate, DecoderAttn, Data2Text
-from utils import load_checkpoint
+from utils import load_checkpoint, get_logger
 
 
-# noinspection DuplicatedCode
 class HttpHandler(BaseHTTPRequestHandler):
     def _response(self, path, args):
         status_code = 200
@@ -26,8 +25,8 @@ class HttpHandler(BaseHTTPRequestHandler):
                 args = {}
 
             if path == '/':
-                resp['value'] = 'root directory'
-            elif path == "/weather":
+                resp['value'] = 'root dir'
+            elif path == '/weather':
                 date, offset = args.get("date"), args.get("offset")
                 state, city = args.get("state"), args.get("city")
                 cursor.execute(
@@ -38,20 +37,26 @@ class HttpHandler(BaseHTTPRequestHandler):
                 seq_input = torch.tensor(seq_info_numpy, dtype=torch.float,
                                          device=device).unsqueeze(dim=0).permute(1, 0, 2)
                 resp['value'] = str(self.generate_text(seq_input))
+            elif path == '/weather/input':
+                events = args.get("events")
+                seq_info_numpy = get_info(self.parse_event(events))
+                seq_input = torch.tensor(seq_info_numpy, dtype=torch.float,
+                                         device=device).unsqueeze(dim=0).permute(1, 0, 2)
+                resp['value'] = str(self.generate_text(seq_input))
             else:
                 status_code = 404
-                resp["status_code"] = 404
-                resp["msg"] = 'path: [' + path + "] does not exist !"
+                resp['status_code'] = 404
+                resp['msg'] = "path: [" + path + "] does not exist !"
 
         except Exception as e:
-            resp["status_code"] = 1
-            resp["msg"] = 'server error: ' + str(e) + "\n" + traceback.format_exc()
+            resp['status_code'] = 1
+            resp['msg'] = "server error: " + str(e) + "\n" + traceback.format_exc()
 
         try:
             resp = json.dumps(resp, ensure_ascii=False)
         except Exception as e:
             resp = {'status_code': 2, 'msg': 'server error: ' +
-                                             str(e) + "\n" + traceback.format_exc(), 'value': ''}
+                                             str(e) + "\n" + traceback.format_exc(), 'value': ""}
             resp = json.dumps(resp, ensure_ascii=False)
 
         self.send_response(status_code)
@@ -59,6 +64,9 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(resp.encode())
+
+        logger.info(
+            f'{self.client_address[0]} -- [{self.log_date_time_string()}] "{self.requestline}" {status_code}')
 
     @staticmethod
     def generate_text(gen_input):
@@ -69,9 +77,10 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         return {"text": text_gen, "attn": str(attn.squeeze().numpy().tolist())}
 
+    # noinspection DuplicatedCode
     @staticmethod
     def parse_event(events):
-        data_dict = {}
+        _dict = {}
         idx = 0
         for line in events.split("\n"):
             if len(line.strip()) == 0:
@@ -98,19 +107,26 @@ class HttpHandler(BaseHTTPRequestHandler):
                     dict_idx['mode_bucket_0_100_4'] = text[text.index(':') + 1:]
             if 'mode_bucket_0_20_2' not in dict_idx:
                 dict_idx['mode_bucket_0_20_2'] = ''
-            data_dict['id' + str(idx)] = dict_idx
+            _dict['id' + str(idx)] = dict_idx
             idx += 1
-        return data_dict
+        return _dict
 
     def do_GET(self):
         result = url_parser.urlparse(self.path)
+        logger.info(f'GET Request, Path: {result.path}')
         self._response(result.path, result.query)
+
+    def do_POST(self):
+        path = url_parser.urlparse(self.path).path
+        content_len = int(self.headers.get('Content-Length'))
+        post_body = self.rfile.read(content_len)
+        self._response(path, "events=" + post_body.decode())
 
 
 if __name__ == '__main__':
+    logger = get_logger('./results/logs/server.log')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data_processor = DataProcessor()
-
     encoder = EncoderGate(params["input_dim"], params["embed_dim"], params["hidden_dim"], params["dropout"])
     decoder = DecoderAttn(params["output_dim"], params["embed_dim"], params["hidden_dim"], params["dropout"])
     model = Data2Text(encoder, decoder, params["beam_width"], torch.cuda.is_available()).to(device)
@@ -119,9 +135,9 @@ if __name__ == '__main__':
     model.eval()
     del checkpoint
 
-    conn = mysql_connector.connect(host="[host]", port="[port]",
-                                   user="[username]", password="[password]",
-                                   database="[db_name]")
+    conn = mysql_connector.connect(host=params['host'], port=params['port'],
+                                   user=params['user'], password=params['pwd'],
+                                   database=params['db_name'])
     cursor = conn.cursor()
 
     httpd = HTTPServer(('', 9527), HttpHandler)
