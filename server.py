@@ -3,7 +3,6 @@ import traceback
 import urllib.parse as url_parser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-import mysql.connector as mysql_connector
 import torch
 
 from config import params
@@ -19,25 +18,13 @@ class HttpHandler(BaseHTTPRequestHandler):
         resp = {'status_code': 0, 'msg': '', 'value': ''}
         try:
             if args is not None:
-                args = url_parser.parse_qs(args).items()
-                args = dict([(k, v[0]) for k, v in args])
+                args = json.loads(args)
             else:
                 args = {}
 
             if path == '/':
                 resp['value'] = 'root dir'
             elif path == '/weather':
-                date, offset = args.get("date"), args.get("offset")
-                state, city = args.get("state"), args.get("city")
-                cursor.execute(
-                    "select events from d2t_rel.weather where date=%s and "
-                    "offset=%s and state=%s and city=%s", (date, offset, state, city))
-                events = cursor.fetchall()[0][0]
-                seq_info_numpy = get_info(self.parse_event(events))
-                seq_input = torch.tensor(seq_info_numpy, dtype=torch.float,
-                                         device=device).unsqueeze(dim=0).permute(1, 0, 2)
-                resp['value'] = str(self.generate_text(seq_input))
-            elif path == '/weather/input':
                 events = args.get("events")
                 seq_info_numpy = get_info(self.parse_event(events))
                 seq_input = torch.tensor(seq_info_numpy, dtype=torch.float,
@@ -113,14 +100,13 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         result = url_parser.urlparse(self.path)
-        logger.info(f'GET Request, Path: {result.path}')
         self._response(result.path, result.query)
 
     def do_POST(self):
         path = url_parser.urlparse(self.path).path
         content_len = int(self.headers.get('Content-Length'))
         post_body = self.rfile.read(content_len)
-        self._response(path, "events=" + post_body.decode())
+        self._response(path, post_body.decode())
 
 
 if __name__ == '__main__':
@@ -134,11 +120,6 @@ if __name__ == '__main__':
     model.load_state_dict(checkpoint['model'])
     model.eval()
     del checkpoint
-
-    conn = mysql_connector.connect(host=params['host'], port=params['port'],
-                                   user=params['user'], password=params['pwd'],
-                                   database=params['db_name'])
-    cursor = conn.cursor()
 
     httpd = HTTPServer(('', 9527), HttpHandler)
     httpd.serve_forever()
